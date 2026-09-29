@@ -1,0 +1,133 @@
+pacman/
+│
+├── main.py                         # Person 1
+├── config.json                     # Person 1
+├── Makefile                        # Person 1
+├── requirements.txt                # Shared
+├── README.md                       # Shared
+│
+├── src/
+│   ├── __init__.py
+│   │
+│   │
+│   ├── core/                       #  PERSON 1
+│   │   ├── __init__.py
+│   │   ├── game.py
+│   │   ├── game_loop.py
+│   │   └── game_state.py
+│   │
+│   ├── config/                     # PERSON 1
+│   │   ├── __init__.py
+│   │   ├── config_loader.py
+│   │   └── config_validator.py
+│   │
+│   ├── entities/                   #  PERSON 1
+│   │   ├── __init__.py
+│   │   ├── pacman.py
+│   │   ├── ghost.py
+│   │   ├── pellet.py
+│   │   └── power_crystal.py
+│   │
+│   ├── maze/                       #  PERSON 1
+│   │   ├── __init__.py
+│   │   ├── maze.py
+│   │   ├── maze_loader.py
+│   │   └── maze_collision.py
+│   │
+│   ├── systems/                    #  PERSON 1
+│   │   ├── __init__.py
+│   │   ├── movement.py
+│   │   ├── ghost_ai.py
+│   │   ├── collision.py
+│   │   ├── scoring.py
+│   │   └── level.py
+│   │
+│   │
+│   │   ───────── PERSON 1 / PERSON 2 boundary ─────────
+│   │
+│   │
+│   ├── screens/                    #  PERSON 2
+│   │   ├── __init__.py
+│   │   ├── base_screen.py
+│   │   ├── menu_screen.py
+│   │   ├── instructions_screen.py
+│   │   ├── settings_screen.py
+│   │   ├── high_scores_screen.py
+│   │   ├── gameplay_screen.py
+│   │   ├── pause_screen.py
+│   │   └── game_over_screen.py
+│   │
+│   ├── ui/                         #  PERSON 2
+│   │   ├── __init__.py
+│   │   ├── button.py
+│   │   ├── hud.py
+│   │   ├── panel.py
+│   │   └── toggle.py
+│   │
+│   ├── rendering/                  #  PERSON 2
+│   │   ├── __init__.py
+│   │   ├── maze_renderer.py
+│   │   ├── entity_renderer.py
+│   │   └── background_renderer.py
+│   │
+│   ├── themes/                     # PERSON 2
+│   │   ├── __init__.py
+│   │   ├── theme.py
+│   │   ├── theme_manager.py
+│   │   ├── ice_theme.py
+│   │   └── cosmic_theme.py
+│   │
+│   └── managers/                   #  PERSON 2
+│       ├── __init__.py
+│       ├── screen_manager.py
+│       ├── asset_manager.py
+│       ├── settings_manager.py
+│       └── score_manager.py
+│
+├── external/                       #  PERSON 1
+│   └── mazegenerator/
+│       ├── __init__.py
+│       └── mazegenerator.py
+│
+├── assets/                         #  PERSON 2
+│   ├── common/
+│   │   ├── characters/
+│   │   ├── fonts/
+│   │   ├── sounds/
+│   │   ├── music/
+│   │   └── ui/
+│   │
+│   ├── ice/
+│   │   ├── backgrounds/
+│   │   ├── maze/
+│   │   ├── crystals/
+│   │   └── effects/
+│   │
+│   └── cosmic/
+│       ├── backgrounds/
+│       ├── maze/
+│       ├── crystals/
+│       └── effects/
+│
+├── data/
+│   ├── settings.json               # Person 2
+│   ├── high_scores.json            # Person 2
+│   └── maps/                       # Person 1
+│       ├── level_01.txt
+│       ├── level_02.txt
+│       └── level_03.txt
+│
+├── packaging/
+│   └── package.sh
+│
+└── tests/
+    ├── core/                        #  PERSON 1 
+    │   ├── test_config.py
+    │   ├── test_maze.py
+    │   ├── test_pacman.py
+    │   ├── test_collision.py
+    │   └── test_scoring.py
+    │
+    └── ui/                          #  PERSON 2
+        ├── test_screen_manager.py
+        └── test_settings.py
