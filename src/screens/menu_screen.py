@@ -1,20 +1,30 @@
+"""Provide the main menu screen of the game."""
+
+from collections.abc import Callable
+
 import pygame
 
-from src.managers.screen_manager import ScreenManager
 from src.screens.base_screen import BaseScreen
 from src.ui.button import Button
 
 
 class MenuScreen(BaseScreen):
+    """Display and control the main menu."""
+
     def __init__(
         self,
         surface: pygame.Surface,
-        screen_manager: ScreenManager,
+        change_screen: Callable[[str], None],
     ) -> None:
+        """Initialize the main menu.
+
+        Args:
+            surface: Surface where the menu is drawn.
+            change_screen: Function used to request a screen change.
+        """
         super().__init__(surface)
 
-        self.screen_manager: ScreenManager = screen_manager
-
+        self.change_screen = change_screen
         self.selected_index: int = 0
         self.font: pygame.font.Font = pygame.font.Font(None, 36)
         self.buttons: list[Button] = []
@@ -55,19 +65,18 @@ class MenuScreen(BaseScreen):
         self._update_selection()
 
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Handle keyboard and mouse input for the menu."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_DOWN:
                 self.selected_index = (
                     self.selected_index + 1
                 ) % len(self.buttons)
-
                 self._update_selection()
 
             elif event.key == pygame.K_UP:
                 self.selected_index = (
                     self.selected_index - 1
                 ) % len(self.buttons)
-
                 self._update_selection()
 
             elif event.key == pygame.K_RETURN:
@@ -90,38 +99,39 @@ class MenuScreen(BaseScreen):
                         break
 
     def _update_selection(self) -> None:
+        """Update the selected state of all menu buttons."""
         for index, button in enumerate(self.buttons):
-            button.set_selected(
-                index == self.selected_index
-            )
+            button.set_selected(index == self.selected_index)
 
     def _activate_selected_button(self) -> None:
+        """Perform the action of the currently selected button."""
         if self.selected_index == 0:
-            # START GAME
-            pass
+            self.change_screen("gameplay")
 
         elif self.selected_index == 1:
-            # INSTRUCTIONS
-            pass
+            self.change_screen("instructions")
 
         elif self.selected_index == 2:
-            # HIGH SCORES
-            pass
+            self.change_screen("high_scores")
 
         elif self.selected_index == 3:
-            # SETTINGS
-            pass
+            self.change_screen("settings")
 
         elif self.selected_index == 4:
-            # QUIT GAME
             pygame.event.post(
                 pygame.event.Event(pygame.QUIT)
             )
 
     def update(self, dt: float) -> None:
+        """Update the menu screen.
+
+        Args:
+            dt: Time elapsed since the previous frame.
+        """
         pass
 
     def render(self) -> None:
+        """Draw the menu and its buttons on the screen."""
         self.surface.fill((10, 20, 40))
 
         for button in self.buttons:
