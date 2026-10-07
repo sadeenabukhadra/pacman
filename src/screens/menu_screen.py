@@ -1,18 +1,25 @@
 import pygame
 
+from src.managers.screen_manager import ScreenManager
 from src.screens.base_screen import BaseScreen
 from src.ui.button import Button
 
 
 class MenuScreen(BaseScreen):
-    def __init__(self, surface: pygame.Surface) -> None:
+    def __init__(
+        self,
+        surface: pygame.Surface,
+        screen_manager: ScreenManager,
+    ) -> None:
         super().__init__(surface)
+
+        self.screen_manager: ScreenManager = screen_manager
 
         self.selected_index: int = 0
         self.font: pygame.font.Font = pygame.font.Font(None, 36)
         self.buttons: list[Button] = []
 
-        buttons_texts = [
+        buttons_texts: list[str] = [
             "START GAME",
             "INSTRUCTIONS",
             "HIGH SCORES",
