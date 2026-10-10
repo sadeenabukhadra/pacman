@@ -1,19 +1,39 @@
-"""Manage the active screen of the game."""
+"""Manage switching between game screens."""
 
-from src.screens.base_screen import BaseScreen
+from collections.abc import Callable
+from typing import Any
 
 
 class ScreenManager:
-    """Manage and switch between game screens."""
+    """Hold the current screen and switch between registered screens."""
 
     def __init__(self) -> None:
         """Initialize the manager with no active screen."""
-        self.current_screen: BaseScreen | None = None
+        self.current_screen: Any = None
+        self._factories: dict[str, Callable[[], Any]] = {}
 
-    def change_screen(self, new_screen: BaseScreen) -> None:
-        """Set a new screen as the active screen.
+    def register(
+        self,
+        name: str,
+        factory: Callable[[], Any],
+    ) -> None:
+        """Register a function that builds a screen by name."""
+        self._factories[name] = factory
 
-        Args:
-            new_screen: The screen that should become active.
-        """
-        self.current_screen = new_screen
+    def change_screen(self, screen: Any) -> None:
+        """Switch to a screen given by name or as an object."""
+        if isinstance(screen, str):
+            factory = self._factories.get(screen)
+
+            if factory is None:
+                print(f"Screen '{screen}' is not registered yet.")
+                return
+
+            screen = factory()
+
+        self.current_screen = screen
+
+        # الشاشات المعاد استخدامها تصفّر حالتها عند كل دخول
+        on_enter = getattr(screen, "on_enter", None)
+        if callable(on_enter):
+            on_enter()

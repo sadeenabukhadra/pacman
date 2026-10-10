@@ -1,11 +1,35 @@
 """Provide the main menu screen of the game."""
 
 from collections.abc import Callable
+from pathlib import Path
 
 import pygame
 
 from src.screens.base_screen import BaseScreen
 from src.ui.button import Button
+
+# قياسات التصميم المرجعي (main_menu.jpeg)
+REF_W, REF_H = 1536, 1024
+REF_BUTTON_W, REF_BUTTON_H = 410, 74
+REF_STEP = 86                      # المسافة بين مركزَي زرين
+REF_CENTER_X, REF_FIRST_CY = 1173, 373          
+REF_FONT_SIZE = 32
+REF_HELP_FONT_SIZE = 22
+REF_HELP_Y = (790, 822)
+
+HELP_COLOR = (170, 215, 255)
+
+
+def _load_font(
+    path: str,
+    size: int,
+    fallback_scale: float = 1.4,
+) -> pygame.font.Font:
+    """Load a TTF font, or fall back to the default font."""
+    font_file = Path(path)
+    if font_file.exists():
+        return pygame.font.Font(str(font_file), size)
+    return pygame.font.Font(None, round(size * fallback_scale))
 
 
 class MenuScreen(BaseScreen):
@@ -16,20 +40,80 @@ class MenuScreen(BaseScreen):
         surface: pygame.Surface,
         change_screen: Callable[[str], None],
     ) -> None:
-        """Initialize the main menu.
-
-        Args:
-            surface: Surface where the menu is drawn.
-            change_screen: Function used to request a screen change.
-        """
+        """Initialize the main menu."""
         super().__init__(surface)
 
         self.change_screen = change_screen
-        self.selected_index: int = 0
-        self.font: pygame.font.Font = pygame.font.Font(None, 36)
+        self.selected_index = 0
+
+        width, height = self.surface.get_size()
+        self.scale = width / REF_W
+
+        # -------------------------
+        # Background
+        # -------------------------
+
+        self.background = pygame.image.load(
+        "images/main_menu/menu.png"
+        ).convert()
+
+        self.background = pygame.transform.smoothscale(
+            self.background,
+            (width, height),
+        )
+
+        # -------------------------
+        # Button images
+        # -------------------------
+
+        self.option_image = pygame.image.load(
+            "images/main_menu/option.png"
+        ).convert_alpha()
+
+        self.select_image = pygame.image.load(
+            "images/main_menu/select.png"
+        ).convert_alpha()
+
+        self.star_image = pygame.image.load(
+            "images/main_menu/star_select.png"
+        ).convert_alpha()
+
+        # -------------------------
+        # Fonts
+        # -------------------------
+
+        self.font = _load_font(
+            "fonts/orbitron-semibold.ttf",
+            round(REF_FONT_SIZE * self.scale),
+        )
+        help_font = _load_font(
+            "fonts/orbitron-regular.ttf",
+            round(REF_HELP_FONT_SIZE * self.scale),
+        )
+
+        # -------------------------
+        # Help text
+        # -------------------------
+
+        self.help_center_x = round(REF_CENTER_X * self.scale)
+        self.help_lines = [
+            (
+                help_font.render("UP / DOWN: SELECT", True, HELP_COLOR),
+                round(REF_HELP_Y[0] * self.scale),
+            ),
+            (
+                help_font.render("ENTER: CONFIRM", True, HELP_COLOR),
+                round(REF_HELP_Y[1] * self.scale),
+            ),
+        ]
+
+        # -------------------------
+        # Buttons
+        # -------------------------
+
         self.buttons: list[Button] = []
 
-        buttons_texts: list[str] = [
+        buttons_texts = [
             "START GAME",
             "INSTRUCTIONS",
             "HIGH SCORES",
@@ -37,35 +121,32 @@ class MenuScreen(BaseScreen):
             "QUIT GAME",
         ]
 
-        button_width: int = 300
-        button_height: int = 60
-        button_gap: int = 20
+        button_width = round(REF_BUTTON_W * self.scale)
+        button_height = round(REF_BUTTON_H * self.scale)
+        step = round(REF_STEP * self.scale)
+
+        center_x = round(REF_CENTER_X * self.scale)
+        first_cy = round(REF_FIRST_CY * self.scale)
 
         for index, text in enumerate(buttons_texts):
-            x = self.surface.get_width() - button_width - 100
-            y = 250 + index * (button_height + button_gap)
+            rect = pygame.Rect(0, 0, button_width, button_height)
+            rect.center = (center_x, first_cy + index * step)
 
-            rect = pygame.Rect(
-                x,
-                y,
-                button_width,
-                button_height,
+            self.buttons.append(
+                Button(
+                    rect=rect,
+                    text=text,
+                    font=self.font,
+                    normal_image=self.option_image,
+                    selected_image=self.select_image,
+                    star_image=self.star_image,
+                )
             )
-
-            button = Button(
-                rect=rect,
-                text=text,
-                font=self.font,
-                normal_color=(30, 45, 70),
-                selected_color=(70, 160, 220),
-            )
-
-            self.buttons.append(button)
 
         self._update_selection()
 
     def handle_event(self, event: pygame.event.Event) -> None:
-        """Handle keyboard and mouse input for the menu."""
+        """Handle menu input."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_DOWN:
                 self.selected_index = (
@@ -99,12 +180,12 @@ class MenuScreen(BaseScreen):
                         break
 
     def _update_selection(self) -> None:
-        """Update the selected state of all menu buttons."""
+        """Update selected button."""
         for index, button in enumerate(self.buttons):
             button.set_selected(index == self.selected_index)
 
     def _activate_selected_button(self) -> None:
-        """Perform the action of the currently selected button."""
+        """Activate selected menu option."""
         if self.selected_index == 0:
             self.change_screen("gameplay")
 
@@ -118,21 +199,20 @@ class MenuScreen(BaseScreen):
             self.change_screen("settings")
 
         elif self.selected_index == 4:
-            pygame.event.post(
-                pygame.event.Event(pygame.QUIT)
-            )
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
 
     def update(self, dt: float) -> None:
-        """Update the menu screen.
-
-        Args:
-            dt: Time elapsed since the previous frame.
-        """
-        pass
+        """Update menu."""
 
     def render(self) -> None:
-        """Draw the menu and its buttons on the screen."""
-        self.surface.fill((10, 20, 40))
+        """Draw menu."""
+        self.surface.blit(self.background, (0, 0))
 
         for button in self.buttons:
             button.render(self.surface)
+
+        for text_surface, y in self.help_lines:
+            self.surface.blit(
+                text_surface,
+                text_surface.get_rect(center=(self.help_center_x, y)),
+            )
