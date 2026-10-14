@@ -8,6 +8,7 @@ import pygame
 from src.managers.settings_manager import load_settings, save_settings
 from src.screens.base_screen import BaseScreen
 from src.ui.button import Button
+from src.themes.theme_manager import ThemeManager
 
 IMAGE_DIR = Path("images/sitting")
 # كل القياسات أدناه لنافذة 1200 x 800 وتتكيف مع المعامل scale
@@ -88,12 +89,13 @@ class SettingsScreen(BaseScreen):
     def __init__(
         self,
         surface: pygame.Surface,
+        theme_manager: ThemeManager,
         change_screen: Callable[[str], None],
     ) -> None:
         """Initialize the settings screen."""
         super().__init__(surface)
         self.change_screen = change_screen
-
+        self.theme_manager = theme_manager
         width, height = self.surface.get_size()
         self.scale = width / REF_W
         scale = self.scale
@@ -270,8 +272,12 @@ class SettingsScreen(BaseScreen):
             self.change_screen("menu")
 
     def _save(self) -> None:
-        """Save the settings and apply the screen mode."""
+        """Save and apply the current settings."""
         save_settings(self.settings)
+
+        self.theme_manager.set_theme(
+            self.settings["world"]
+        )
 
         if pygame.display.is_fullscreen() != self.settings["fullscreen"]:
             pygame.display.toggle_fullscreen()

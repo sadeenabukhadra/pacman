@@ -1,45 +1,140 @@
-"""Store and load the high scores."""
+"""Manage loading, checking and saving high scores."""
 
 import json
 from pathlib import Path
 
-SCORES_FILE = Path("data/high_scores.json")
+
+SCORE_FILE = Path("high_scor.json")
 MAX_SCORES = 10
 
 
-def load_scores() -> list[dict]:
-    """Return the saved scores, highest first."""
+def load_scores() -> list[dict[str, int | str]]:
+    """Load high scores from the score file."""
+    if not SCORE_FILE.exists():
+        return []
+
     try:
-        data = json.loads(SCORES_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = json.loads(
+            SCORE_FILE.read_text(
+                encoding="utf-8",
+            )
+        )
+    except (
+        json.JSONDecodeError,
+        OSError,
+    ):
         return []
 
-    if not isinstance(data, list):
+    if not isinstance(
+        data,
+        list,
+    ):
         return []
 
-    scores = [
-        {"name": str(item["name"]), "score": int(item["score"])}
-        for item in data
-        if isinstance(item, dict) and "name" in item and "score" in item
+    scores: list[
+        dict[str, int | str]
+    ] = []
+
+    for item in data:
+        if not isinstance(
+            item,
+            dict,
+        ):
+            continue
+
+        name = item.get(
+            "name"
+        )
+
+        score = item.get(
+            "score"
+        )
+
+        if not isinstance(
+            name,
+            str,
+        ):
+            continue
+
+        if not isinstance(
+            score,
+            int,
+        ):
+            continue
+
+        scores.append(
+            {
+                "name": name,
+                "score": score,
+            }
+        )
+
+    scores.sort(
+        key=lambda item: int(
+            item["score"]
+        ),
+        reverse=True,
+    )
+
+    return scores[
+        :MAX_SCORES
     ]
-    scores.sort(key=lambda item: item["score"], reverse=True)
-    return scores[:MAX_SCORES]
 
 
-def is_high_score(score: int) -> bool:
-    """Check whether a score enters the top list."""
-    scores = load_scores()
-    return len(scores) < MAX_SCORES or score > scores[-1]["score"]
-
-
-def add_score(name: str, score: int) -> None:
-    """Add a score and keep only the best ones."""
-    scores = load_scores()
-    scores.append({"name": name.strip()[:10] or "PLAYER", "score": score})
-    scores.sort(key=lambda item: item["score"], reverse=True)
-
-    SCORES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SCORES_FILE.write_text(
-        json.dumps(scores[:MAX_SCORES], indent=2),
+def save_scores(
+    scores: list[dict[str, int | str]],
+) -> None:
+    """Save high scores to the score file."""
+    SCORE_FILE.write_text(
+        json.dumps(
+            scores,
+            indent=4,
+        ),
         encoding="utf-8",
+    )
+
+
+def is_high_score(
+    score: int,
+) -> bool:
+    """Return True if the score belongs in the high-score table."""
+    scores = load_scores()
+
+    if len(scores) < MAX_SCORES:
+        return True
+
+    lowest_score = int(
+        scores[-1]["score"]
+    )
+
+    return score > lowest_score
+
+
+def add_score(
+    name: str,
+    score: int,
+) -> None:
+    """Add a score and keep only the best scores."""
+    scores = load_scores()
+
+    scores.append(
+        {
+            "name": name,
+            "score": score,
+        }
+    )
+
+    scores.sort(
+        key=lambda item: int(
+            item["score"]
+        ),
+        reverse=True,
+    )
+
+    scores = scores[
+        :MAX_SCORES
+    ]
+
+    save_scores(
+        scores
     )

@@ -1,39 +1,66 @@
-"""Manage switching between game screens."""
+"""Manage creation and switching of game screens."""
 
 from collections.abc import Callable
-from typing import Any
+
+from src.screens.base_screen import BaseScreen
+
+
+ScreenFactory = Callable[[], BaseScreen]
 
 
 class ScreenManager:
-    """Hold the current screen and switch between registered screens."""
+    """Manage registered game screens and the active screen."""
 
     def __init__(self) -> None:
-        """Initialize the manager with no active screen."""
-        self.current_screen: Any = None
-        self._factories: dict[str, Callable[[], Any]] = {}
+        """Initialize the screen manager."""
+        self.current_screen: BaseScreen | None = None
+        self._screens: dict[str, ScreenFactory] = {}
 
     def register(
         self,
         name: str,
-        factory: Callable[[], Any],
+        factory: ScreenFactory,
     ) -> None:
-        """Register a function that builds a screen by name."""
-        self._factories[name] = factory
+        """Register a screen.
 
-    def change_screen(self, screen: Any) -> None:
-        """Switch to a screen given by name or as an object."""
-        if isinstance(screen, str):
-            factory = self._factories.get(screen)
+        Args:
+            name: Unique screen name.
+            factory: Function that creates the screen.
+        """
+        self._screens[name] = factory
 
-            if factory is None:
-                print(f"Screen '{screen}' is not registered yet.")
-                return
+    def change_screen(self, name: str) -> None:
+        """Change the active screen.
 
-            screen = factory()
+        Args:
+            name: Name of the registered screen.
 
-        self.current_screen = screen
+        Raises:
+            ValueError: If the screen is not registered.
+        """
+        if name not in self._screens:
+            raise ValueError(
+                f"Screen '{name}' is not registered."
+            )
 
-        # الشاشات المعاد استخدامها تصفّر حالتها عند كل دخول
-        on_enter = getattr(screen, "on_enter", None)
+        self.current_screen = self._screens[name]()
+
+        on_enter = getattr(
+            self.current_screen,
+            "on_enter",
+            None,
+        )
+
         if callable(on_enter):
             on_enter()
+
+    def has_screen(self, name: str) -> bool:
+        """Check whether a screen is registered.
+
+        Args:
+            name: Screen name.
+
+        Returns:
+            True if the screen exists.
+        """
+        return name in self._screens
