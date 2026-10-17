@@ -14,6 +14,7 @@ from src.screens.instructions_screen import InstructionsScreen
 from src.screens.menu_screen import MenuScreen
 from src.screens.settings_screen import SettingsScreen
 from src.themes.theme_manager import ThemeManager
+from src.screens.game_over_screen import GameOverScreen
 
 
 WIDTH = 1200
@@ -137,6 +138,18 @@ def main() -> None:
     screen_manager.register(
         "settings",
         lambda: settings_screen,
+    )
+ 
+    # -------------------------
+    # Register game over
+    # -------------------------
+
+    screen_manager.register(
+        "game_over",
+        lambda:GameOverScreen(
+            surface=surface,
+            change_screen=change
+        )
     )
 
     # -------------------------
