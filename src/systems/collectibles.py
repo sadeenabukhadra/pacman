@@ -62,7 +62,10 @@ class Collectibles:
         available = self._reachable(player_spawn)
         available.remove(player_spawn)
         if len(available) < 4:
-            raise ValueError("Four reachable tiles are needed for power pellets.")
+            raise ValueError(
+                "Four reachable tiles are "
+                "needed for power pellets."
+            )
         corners = (
             (1, 1), (maze.width - 2, 1),
             (1, maze.height - 2), (maze.width - 2, maze.height - 2),
@@ -124,7 +127,8 @@ class Collectibles:
         return sum(item.is_super for item in self._items.values())
 
     def active_pellets(self) -> Iterator[Pellet]:
-        """Yield remaining pellets for drawing; do not mutate while iterating."""
+        """Yield remaining pellets for drawing;"""
+        """ do not mutate while iterating."""
         yield from self._items.values()
 
     def collect_at(

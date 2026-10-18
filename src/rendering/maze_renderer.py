@@ -5,6 +5,10 @@ the generator, or the reserved cells. Wall outlines are applied to the UNION
 of all pieces, so there are no borders between neighbouring wall tiles.
 """
 
+from collections import OrderedDict
+
+from time import perf_counter
+
 import pygame
 
 from src.managers.asset_manager import AssetManager
@@ -47,6 +51,11 @@ def _inset(mask: pygame.Surface, pixels: int) -> pygame.Surface:
 class MazeRenderer:
     """Cache an antialiased maze while retaining tile position helpers."""
 
+    MAX_WHOLE_PIXELS = 1024 * 1024
+    CHUNK_SIDE = 16
+    CHUNK_PADDING = 4
+    MAX_CACHED_CHUNKS = 48
+
     def __init__(
         self,
         surface: pygame.Surface,
@@ -55,6 +64,7 @@ class MazeRenderer:
         asset_manager: AssetManager,
         area: pygame.Rect | None = None,
         draw_background: bool = True,
+        tile_size: int | None = None,
     ) -> None:
         """Fit the existing expanded Maze grid into the requested area."""
         if maze.width < 1 or maze.height < 1:
@@ -67,16 +77,52 @@ class MazeRenderer:
         if self.area.width < maze.width or self.area.height < maze.height:
             raise ValueError("The drawing area is too small for this maze.")
         self.draw_background = draw_background
-        self.tile_size = min(self.area.width // maze.width,
-                             self.area.height // maze.height)
+        if tile_size is not None and tile_size < 1:
+            raise ValueError("Tile size must be a positive integer.")
+        self.tile_size = tile_size if tile_size is not None else min(
+            self.area.width // maze.width, self.area.height // maze.height,
+        )
         self.origin = (
             self.area.centerx - self.tile_size * maze.width // 2,
             self.area.centery - self.tile_size * maze.height // 2,
         )
+        self._startup_measured = False
         self._built_theme = ""
+        self._whole_image: pygame.Surface | None = None
         self._maze_image: pygame.Surface | None = None
         self._background: pygame.Surface | None = None
         self._digit_mask: pygame.Surface | None = None
+        self._chunk_bounds = pygame.Rect(0, 0, maze.width, maze.height)
+        self._chunks: OrderedDict[tuple[int, int], pygame.Surface] = (
+            OrderedDict()
+        )
+        self._floor_world: pygame.Surface | None = None
+
+    def follow(self, x: float, y: float) -> None:
+        """Follow a tile-center position, clamping the view at maze edges."""
+        world_width = self.maze.width * self.tile_size
+        world_height = self.maze.height * self.tile_size
+        target_x = self.area.centerx - round((x + 0.5) * self.tile_size)
+        target_y = self.area.centery - round((y + 0.5) * self.tile_size)
+        origin_x = (
+            self.area.centerx - world_width // 2
+            if world_width <= self.area.width else
+            min(self.area.left, max(self.area.right - world_width, target_x))
+        )
+        origin_y = (
+            self.area.centery - world_height // 2
+            if world_height <= self.area.height else
+            min(self.area.top, max(self.area.bottom - world_height, target_y))
+        )
+        self.origin = (origin_x, origin_y)
+
+    def visible_rect(self) -> pygame.Rect:
+        """Return the visible maze rectangle for clipping actors and UI."""
+        return pygame.Rect(
+            *self.origin,
+            self.maze.width * self.tile_size,
+            self.maze.height * self.tile_size,
+        ).clip(self.area)
 
     def tile_rect(self, x: int, y: int) -> pygame.Rect:
         """Return a tile rectangle in window coordinates."""
@@ -90,8 +136,12 @@ class MazeRenderer:
 
     def invalidate(self) -> None:
         """Rebuild after changing maze cells or theme assets in place."""
+        self._whole_image = None
         self._maze_image = None
         self._built_theme = ""
+        self._chunks.clear()
+        self._floor_world = None
+        self._digit_mask = None
 
     def rotate_piece(self, name: str, degrees: int = 90) -> None:
         """Retain legacy controls; wall directions now come from Maze."""
@@ -102,8 +152,10 @@ class MazeRenderer:
 
     def _geometry(self, tile: int) -> pygame.Surface:
         """Build connected arms with rounded caps, then union solid cells."""
-        mask = pygame.Surface((self.maze.width * tile,
-                               self.maze.height * tile), pygame.SRCALPHA)
+        bounds = self._chunk_bounds
+        ox, oy = bounds.topleft
+        mask = pygame.Surface((bounds.width * tile,
+                               bounds.height * tile), pygame.SRCALPHA)
         width = max(2, round(tile * WALL_THICKNESS))
         frame = max(2, round(tile * FRAME_THICKNESS))
         solids = {(x, y)
@@ -113,6 +165,11 @@ class MazeRenderer:
         covered = {(x + dx, y + dy) for x, y in solids
                    for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
         for x, y in self.maze.walls():
+            if not (
+                bounds.left - 3 <= x < bounds.right + 3
+                and bounds.top - 3 <= y < bounds.bottom + 3
+            ):
+                continue
             if (x, y) in covered and not self.maze.is_outer(x, y):
                 # Retain external wall connections, but remove the old
                 # perimeter underneath the now slimmer digit strokes.
@@ -124,15 +181,22 @@ class MazeRenderer:
                         continue
                     sx, sy = min(solids, key=lambda pos:
                                  abs(pos[0] - x) + abs(pos[1] - y))
-                    start = (nx * tile + tile // 2,
-                             ny * tile + tile // 2)
-                    end = ((sx if dx else x) * tile + tile // 2,
-                           (sy if dy else y) * tile + tile // 2)
-                    pygame.draw.line(mask, WHITE, start, end, width)
+                    start_point = (
+                        (nx - ox) * tile + tile // 2,
+                        (ny - oy) * tile + tile // 2,
+                    )
+                    end_point = (
+                        ((sx if dx else x) - ox) * tile + tile // 2,
+                        ((sy if dy else y) - oy) * tile + tile // 2,
+                    )
+                    pygame.draw.line(
+                        mask, WHITE, start_point, end_point, width,
+                    )
                 continue
             outer = self.maze.is_outer(x, y)
             thickness = frame if outer else width
-            cx, cy = x * tile + tile // 2, y * tile + tile // 2
+            cx = (x - ox) * tile + tile // 2
+            cy = (y - oy) * tile + tile // 2
             radius = thickness // 2
             pygame.draw.circle(mask, WHITE, (cx, cy), radius)
             for dx, dy, _ in DIRECTIONS:
@@ -145,13 +209,13 @@ class MazeRenderer:
                        else width)
                 half = arm // 2
                 if dx:
-                    start = cx if dx > 0 else x * tile
-                    end = (x + 1) * tile if dx > 0 else cx
+                    start = cx if dx > 0 else (x - ox) * tile
+                    end = (x + 1 - ox) * tile if dx > 0 else cx
                     rect = pygame.Rect(start, cy - half,
                                        end - start + 1, arm)
                 else:
-                    start = cy if dy > 0 else y * tile
-                    end = (y + 1) * tile if dy > 0 else cy
+                    start = cy if dy > 0 else (y - oy) * tile
+                    end = (y + 1 - oy) * tile if dy > 0 else cy
                     rect = pygame.Rect(cx - half, start,
                                        arm, end - start + 1)
                 pygame.draw.rect(mask, WHITE, rect)
@@ -175,8 +239,8 @@ class MazeRenderer:
                 while (x + count * dx, y + count * dy) in solids:
                     count += 1
                 rect = pygame.Rect(
-                    (x - 1) * tile + margin,
-                    (y - 1) * tile + margin,
+                    (x - 1 - ox) * tile + margin,
+                    (y - 1 - oy) * tile + margin,
                     stroke + (count - 1) * dx * tile,
                     stroke + (count - 1) * dy * tile,
                 )
@@ -223,8 +287,13 @@ class MazeRenderer:
         # Mirrored repeats avoid an abrupt wrap in the sampled texture.
         variants = {(a, b): pygame.transform.flip(patch, a, b)
                     for a in (False, True) for b in (False, True)}
-        for row, y in enumerate(range(0, size[1], height)):
-            for col, x in enumerate(range(0, size[0], width)):
+        global_x = self._chunk_bounds.left * tile
+        global_y = self._chunk_bounds.top * tile
+        first_x, first_y = -(global_x % width), -(global_y % height)
+        for row, y in enumerate(range(first_y, size[1], height)):
+            row += global_y // height
+            for col, x in enumerate(range(first_x, size[0], width)):
+                col += global_x // width
                 texture.blit(variants[(bool(col % 2), bool(row % 2))],
                              (x, y))
         return texture
@@ -233,10 +302,21 @@ class MazeRenderer:
         """Build the floor, textured silhouette, and continuous ice rim."""
         theme = self.theme_manager.current
         tile = self.tile_size * ANTIALIAS
-        size = (self.maze.width * tile, self.maze.height * tile)
-        floor = self.asset_manager.load(
-            theme.maze_path(theme.floor), size,
-        ).copy()
+        bounds = self._chunk_bounds
+        size = (bounds.width * tile, bounds.height * tile)
+        if self._floor_world is None:
+            source = self.asset_manager.load(theme.maze_path(theme.floor))
+            self._floor_world = pygame.transform.smoothscale(source, (
+                self.maze.width * self.tile_size,
+                self.maze.height * self.tile_size,
+            ))
+        crop = pygame.Rect(
+            bounds.left * self.tile_size, bounds.top * self.tile_size,
+            bounds.width * self.tile_size, bounds.height * self.tile_size,
+        )
+        floor = pygame.transform.smoothscale(
+            self._floor_world.subsurface(crop), size,
+        )
         level = round(255 * FLOOR_BRIGHTNESS)
         floor.fill((level, level, level),
                    special_flags=pygame.BLEND_RGB_MULT)
@@ -263,8 +343,8 @@ class MazeRenderer:
                        special_flags=pygame.BLEND_RGBA_SUB)
         floor.blit(_tint(highlight, (255, 255, 255, 180)), (0, 0))
         self._maze_image = pygame.transform.smoothscale(
-            floor, (self.maze.width * self.tile_size,
-                    self.maze.height * self.tile_size),
+            floor, (bounds.width * self.tile_size,
+                    bounds.height * self.tile_size),
         )
         self._background = None
         if self.draw_background:
@@ -283,7 +363,7 @@ class MazeRenderer:
         Every painted pixel is clipped to the original digit silhouette.
         """
         digits = self._digit_mask
-        if digits is None:
+        if digits is None or digits.get_bounding_rect().width == 0:
             return
         base = floor.copy()
         theme = self.theme_manager.current
@@ -371,17 +451,108 @@ class MazeRenderer:
         # Keep its orientation and colors; only the digit mask clips it.
         side = max(8, tile * 3)
         patch = pygame.transform.smoothscale(sample, (side, side))
-        for y in range(bounds.top, bounds.bottom, side):
-            for x in range(bounds.left, bounds.right, side):
+        global_x = self._chunk_bounds.left * tile
+        global_y = self._chunk_bounds.top * tile
+        start_x = bounds.left - (bounds.left + global_x) % side
+        start_y = bounds.top - (bounds.top + global_y) % side
+        for y in range(start_y, bounds.bottom, side):
+            for x in range(start_x, bounds.right, side):
                 result.blit(patch, (x, y))
         return result
 
     def render(self) -> None:
-        """Blit cached layers; rebuild only when the theme/maze changes."""
-        if (self._maze_image is None
-                or self._built_theme != self.theme_manager.current.name):
+        """Draw only visible cached chunks, with one shared camera origin."""
+        render_started = perf_counter()
+        theme = self.theme_manager.current
+        if self._built_theme != theme.name:
+            self.invalidate()
+            self._built_theme = theme.name
+        if self.draw_background:
+            background = self.asset_manager.load(
+                theme.maze_path(theme.background), self.surface.get_size(),
+            )
+            self.surface.blit(background, (0, 0))
+        background_finished = perf_counter()
+        previous_clip = self.surface.get_clip()
+        clip = self.area.clip(previous_clip)
+        self.surface.set_clip(clip)
+        try:
+            if clip.width <= 0 or clip.height <= 0:
+                return
+            world_pixels = (
+                self.maze.width * self.maze.height * self.tile_size ** 2
+            )
+            if world_pixels <= self.MAX_WHOLE_PIXELS:
+                # A small maze needs one build, avoiding overlapping chunks.
+                if self._whole_image is None:
+                    self._build()
+                    if self._maze_image is None:
+                        raise RuntimeError("The maze could not be drawn.")
+                    self._whole_image = self._maze_image
+                    self._maze_image = None
+                    self._digit_mask = None
+                self.surface.blit(self._whole_image, self.origin)
+                return
+            pixels = self.CHUNK_SIDE * self.tile_size
+            first_x = max(0, (clip.left - self.origin[0]) // pixels)
+            first_y = max(0, (clip.top - self.origin[1]) // pixels)
+            last_x = min(
+                (self.maze.width - 1) // self.CHUNK_SIDE,
+                (clip.right - 1 - self.origin[0]) // pixels,
+            )
+            last_y = min(
+                (self.maze.height - 1) // self.CHUNK_SIDE,
+                (clip.bottom - 1 - self.origin[1]) // pixels,
+            )
+            for cy in range(first_y, last_y + 1):
+                for cx in range(first_x, last_x + 1):
+                    image = self._chunk(cx, cy)
+                    self.surface.blit(image, (
+                        self.origin[0] + cx * pixels,
+                        self.origin[1] + cy * pixels,
+                    ))
+        finally:
+            self.surface.set_clip(previous_clip)
+            if not self._startup_measured:
+                finished = perf_counter()
+                background_ms = (background_finished - render_started) * 1000
+                walls_ms = (finished - background_finished) * 1000
+                print(f"[MAZE] Background/theme: {background_ms:.1f} ms")
+                print(f"[MAZE] Wall chunks: {walls_ms:.1f} ms")
+                self._startup_measured = True
+
+    def _chunk(self, cx: int, cy: int) -> pygame.Surface:
+        """Cache a padded build, cropping only after wall joins are shaded."""
+        key = (cx, cy)
+        if key in self._chunks:
+            self._chunks.move_to_end(key)
+            return self._chunks[key]
+        cells = pygame.Rect(
+            cx * self.CHUNK_SIDE, cy * self.CHUNK_SIDE,
+            self.CHUNK_SIDE, self.CHUNK_SIDE,
+        ).clip(pygame.Rect(0, 0, self.maze.width, self.maze.height))
+        padding = self.CHUNK_PADDING
+        self._chunk_bounds = cells.inflate(2 * padding, 2 * padding).clip(
+            pygame.Rect(0, 0, self.maze.width, self.maze.height),
+        )
+        try:
             self._build()
-        if self.draw_background and self._background is not None:
-            self.surface.blit(self._background, (0, 0))
-        if self._maze_image is not None:
-            self.surface.blit(self._maze_image, self.origin)
+            if self._maze_image is None:
+                raise RuntimeError("The maze chunk could not be drawn.")
+            crop = pygame.Rect(
+                (cells.left - self._chunk_bounds.left) * self.tile_size,
+                (cells.top - self._chunk_bounds.top) * self.tile_size,
+                cells.width * self.tile_size,
+                cells.height * self.tile_size,
+            )
+            image = self._maze_image.subsurface(crop).copy()
+        finally:
+            self._chunk_bounds = pygame.Rect(
+                0, 0, self.maze.width, self.maze.height,
+            )
+            self._maze_image = None
+            self._digit_mask = None
+        self._chunks[key] = image
+        while len(self._chunks) > self.MAX_CACHED_CHUNKS:
+            self._chunks.popitem(last=False)
+        return image

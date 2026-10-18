@@ -118,7 +118,8 @@ class Ghost:
             ValueError: If duration is negative or non-finite.
         """
         if not math.isfinite(seconds) or seconds < 0:
-            raise ValueError("Fright duration must be finite and non-negative.")
+            raise ValueError(
+                "Fright duration must be finite and non-negative.")
         if self.mode == "eaten" or seconds == 0:
             return
         self.mode = "frightened"

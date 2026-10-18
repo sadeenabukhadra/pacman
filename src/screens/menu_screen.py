@@ -12,7 +12,7 @@ from src.ui.button import Button
 REF_W, REF_H = 1536, 1024
 REF_BUTTON_W, REF_BUTTON_H = 410, 74
 REF_STEP = 86                      # المسافة بين مركزَي زرين
-REF_CENTER_X, REF_FIRST_CY = 1173, 373          
+REF_CENTER_X, REF_FIRST_CY = 1173, 373
 REF_FONT_SIZE = 32
 REF_HELP_FONT_SIZE = 22
 REF_HELP_Y = (790, 822)
@@ -54,7 +54,7 @@ class MenuScreen(BaseScreen):
         # -------------------------
 
         self.background = pygame.image.load(
-        "images/main_menu/menu.png"
+            "images/main_menu/menu.png"
         ).convert()
 
         self.background = pygame.transform.smoothscale(

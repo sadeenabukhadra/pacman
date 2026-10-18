@@ -34,7 +34,7 @@ class Pacman:
 
     ANIMATION_INTERVAL = 0.12
 
-    def __init__(self, maze: Maze, speed: float = 5.0) -> None:
+    def __init__(self, maze: Maze, speed: float = 8.0) -> None:
         """Start on the open tile nearest the maze center.
 
         Args:

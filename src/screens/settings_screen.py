@@ -25,11 +25,9 @@ PANEL_CX = (320, 880)
 # أشرطة الإعدادات
 BAR_W = 370
 BAR_CY = 590
-BAR_CX = (210, 600, 990)
+BAR_CX = (600,)
 
 # موضع المفتاح داخل الشريط: (مركز أفقي، عرض) كنسبة من عرض الشريط
-MUSIC_SLOT = (0.7435, 0.331)
-SOUND_SLOT = (0.789, 0.252)
 SCREEN_SLOT = (0.74, 0.37)
 SCREEN_SLOT_H = 0.42   # ارتفاع القائمة كنسبة من ارتفاع الشريط
 
@@ -51,7 +49,7 @@ MESSAGE_COLOR = (170, 245, 255)
 # ترتيب التنقل بالأسهم
 GRID = [
     ["ice", "cosmic"],
-    ["music", "sound", "screen"],
+    ["screen"],
     ["save", "back"],
 ]
 POSITIONS = {
@@ -84,26 +82,30 @@ def _load_image(name: str, width: int | None = None) -> pygame.Surface:
 
 
 class SettingsScreen(BaseScreen):
-    """Let the player choose the world, sound and screen mode."""
+    """Let the player choose the world and screen mode."""
 
     def __init__(
         self,
         surface: pygame.Surface,
         theme_manager: ThemeManager,
         change_screen: Callable[[str], None],
+        on_display_change: Callable[[bool], None] | None = None,
     ) -> None:
         """Initialize the settings screen."""
         super().__init__(surface)
         self.change_screen = change_screen
+        self.on_display_change = on_display_change
         self.theme_manager = theme_manager
         width, height = self.surface.get_size()
         self.scale = width / REF_W
-        scale = self.scale
+        scale: float = self.scale
 
         def px(value: float) -> int:
             return round(value * scale)
 
         self.settings = load_settings()
+        # The active theme is authoritative when opening this screen.
+        self.settings["world"] = self.theme_manager.current.name
         self.focus = POSITIONS[self.settings["world"]]
         self.message_time = 0.0
 
@@ -155,8 +157,6 @@ class SettingsScreen(BaseScreen):
         # -------------------------
 
         bar_files = {
-            "music": "muisc_without_toogglo.png",
-            "sound": "soundeffect_without_toggle.png",
             "screen": "chosse_screenmod_without_any_chose.png",
         }
         self.bar_images: dict[str, pygame.Surface] = {}
@@ -172,20 +172,7 @@ class SettingsScreen(BaseScreen):
         # Toggles
         # -------------------------
 
-        self.slots = {
-            "music": MUSIC_SLOT,
-            "sound": SOUND_SLOT,
-            "screen": SCREEN_SLOT,
-        }
-        self.toggle_images: dict[tuple[str, bool], pygame.Surface] = {}
-
-        for name in ("music", "sound"):
-            toggle_width = round(self.slots[name][1] * self.rects[name].width)
-            for state, file_name in ((True, "toggle_on.png"), (False, "toggle_off.png")):
-                self.toggle_images[(name, state)] = _load_image(
-                    file_name,
-                    toggle_width,
-                )
+        self.slots = {"screen": SCREEN_SLOT}
 
         self.dropdown_font = _load_font(
             "fonts/orbitron-semibold.ttf",
@@ -200,10 +187,11 @@ class SettingsScreen(BaseScreen):
             "fonts/orbitron-semibold.ttf",
             px(BTN_FONT),
         )
+        self._message_font = button_font
         normal = pygame.image.load(
             str(IMAGE_DIR / "notselect_chose.png")
         ).convert_alpha()
-        selected = pygame.image.load(
+        selected_image = pygame.image.load(
             str(IMAGE_DIR / "selectchose.png")
         ).convert_alpha()
         star = pygame.Surface((1, 1), pygame.SRCALPHA)
@@ -223,7 +211,7 @@ class SettingsScreen(BaseScreen):
                 text=text,
                 font=button_font,
                 normal_image=normal,
-                selected_image=selected,
+                selected_image=selected_image,
                 star_image=star,
             )
 
@@ -260,10 +248,6 @@ class SettingsScreen(BaseScreen):
         """Apply the action of an item."""
         if name in ("ice", "cosmic"):
             self.settings["world"] = name
-        elif name == "music":
-            self.settings["music"] = not self.settings["music"]
-        elif name == "sound":
-            self.settings["sfx"] = not self.settings["sfx"]
         elif name == "screen":
             self.settings["fullscreen"] = not self.settings["fullscreen"]
         elif name == "save":
@@ -273,13 +257,25 @@ class SettingsScreen(BaseScreen):
 
     def _save(self) -> None:
         """Save and apply the current settings."""
+        self.message_surface = self._message_font.render(
+            "SETTINGS SAVED", True, MESSAGE_COLOR,
+        )
         save_settings(self.settings)
 
         self.theme_manager.set_theme(
             self.settings["world"]
         )
 
-        if pygame.display.is_fullscreen() != self.settings["fullscreen"]:
+        if self.on_display_change is not None:
+            try:
+                self.on_display_change(self.settings["fullscreen"])
+            except (pygame.error, ValueError, RuntimeError):
+                self.settings["fullscreen"] = pygame.display.is_fullscreen()
+                save_settings(self.settings)
+                self.message_surface = self._message_font.render(
+                    "DISPLAY MODE UNAVAILABLE", True, MESSAGE_COLOR,
+                )
+        elif pygame.display.is_fullscreen() != self.settings["fullscreen"]:
             pygame.display.toggle_fullscreen()
 
         self.message_time = 1.8
@@ -294,8 +290,10 @@ class SettingsScreen(BaseScreen):
     def on_enter(self) -> None:
         """Discard unsaved changes each time the screen is shown."""
         self.settings = load_settings()
+        self.settings["world"] = self.theme_manager.current.name
         self.focus = POSITIONS[self.settings["world"]]
         self.message_time = 0.0
+
     def handle_event(self, event: pygame.event.Event) -> None:
         """Handle input."""
         if event.type == pygame.KEYDOWN:
@@ -344,7 +342,7 @@ class SettingsScreen(BaseScreen):
     def _draw_dropdown(self) -> None:
         """Draw the screen mode selector."""
         bar = self.rects["screen"]
-        ratio_x, ratio_w = self.slots["screen"]
+        _, ratio_w = self.slots["screen"]
 
         box = pygame.Rect(0, 0, 0, 0)
         box.size = (
@@ -377,7 +375,9 @@ class SettingsScreen(BaseScreen):
                 text,
                 (
                     max_text_width,
-                    round(text.get_height() * max_text_width / text.get_width()),
+                    round(
+                        text.get_height() * max_text_width / text.get_width()
+                    ),
                 ),
             )
 
@@ -410,16 +410,9 @@ class SettingsScreen(BaseScreen):
                 image.get_rect(center=self.rects[name].center),
             )
 
-        # الأشرطة والمفاتيح
-        for name in ("music", "sound", "screen"):
-            self.surface.blit(self.bar_images[name], self.rects[name])
-
-        for name, key in (("music", "music"), ("sound", "sfx")):
-            toggle = self.toggle_images[(name, self.settings[key])]
-            self.surface.blit(
-                toggle,
-                toggle.get_rect(center=self._slot_center(name)),
-            )
+        self.surface.blit(
+            self.bar_images["screen"], self.rects["screen"],
+        )
 
         self._draw_dropdown()
 

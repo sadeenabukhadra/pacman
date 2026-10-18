@@ -28,8 +28,10 @@ class ThemeManager:
         theme = THEMES.get(name)
 
         if theme is None:
-            print(f"Warning: unknown theme '{name}'. Keeping "
-                f"'{self.current.name}'.")
+            print(
+                f"Warning: unknown theme '{name}'. Keeping "
+                f"'{self.current.name}'."
+            )
             return
 
         self.current = theme

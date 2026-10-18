@@ -184,7 +184,6 @@ class Maze:
                 if joined:
                     break
 
-
     def _remove_lonely_pillars(self) -> None:
         """Turn wall corners that touch no other wall into floor.
 

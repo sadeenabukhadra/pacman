@@ -23,6 +23,7 @@ BUTTON_CY = 0.915
 BUTTON_SCALE_FACTOR = 0.8
 IMAGE_DIR = Path("images/sitting")
 
+
 class InstructionsScreen(BaseScreen):
     """Display the how-to-play image with a back button inside it."""
 

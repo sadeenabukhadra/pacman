@@ -14,10 +14,10 @@ from src.rendering.maze_renderer import MazeRenderer
 class EntityRenderer:
     """Cache actor images and draw them using maze tile coordinates."""
 
-    SPRITE_SCALE = 1.30
+    SPRITE_SCALE = 1.50
     GHOST_SCALE = 1.50
-    PELLET_SCALE = 0.55
-    POWER_SCALE = 1.35
+    PELLET_SCALE = 0.80
+    POWER_SCALE = 1.55
 
     def __init__(
         self,
@@ -63,7 +63,6 @@ class EntityRenderer:
                 )
         self._load_ghost_frames()
         self._load_pellet_frames()
-
 
     def _load_actor_image(self, path: Path) -> pygame.Surface:
         """Load a sprite and trim its transparent outer margin."""
@@ -186,7 +185,6 @@ class EntityRenderer:
         )
         self.surface.blit(image, image.get_rect(center=center))
 
-
     def _load_pellet_frames(self) -> None:
         """Cache the normal pellet and both themed power pellet images."""
         root = Path(__file__).resolve().parents[2] / "images" / "pac_gum"
@@ -200,6 +198,43 @@ class EntityRenderer:
             for name, filename in files.items()
         }
         self._pellet_scaled: dict[tuple[str, int], pygame.Surface] = {}
+
+    def _get_pellet_frame(self, name: str, size: int) -> pygame.Surface:
+        """Cache a brighter sprite with a fine outline and a soft halo."""
+        key = (name, size)
+        if key in self._pellet_scaled:
+            return self._pellet_scaled[key]
+        source = self._pellet_frames[name]
+        scale = size / max(source.get_size())
+        dimensions = (
+            max(1, round(source.get_width() * scale)),
+            max(1, round(source.get_height() * scale)),
+        )
+        image = pygame.transform.smoothscale(source, dimensions)
+        image.fill((24, 24, 24), special_flags=pygame.BLEND_RGB_ADD)
+        padding = max(2, round(size * 0.15))
+        frame = pygame.Surface(
+            (size + 2 * padding, size + 2 * padding), pygame.SRCALPHA,
+        )
+        center = frame.get_rect().center
+        colors = {
+            "normal": (255, 220, 110),
+            "ice": (130, 235, 255),
+            "cosmic": (220, 150, 255),
+        }
+        accent = colors[name]
+        radius = max(1, size // 2)
+        pygame.draw.circle(frame, (*accent, 24), center, radius + padding)
+        pygame.draw.circle(frame, (*accent, 42), center, radius)
+        outline = pygame.mask.from_surface(image, 32).to_surface(
+            setcolor=(3, 7, 20, 235), unsetcolor=(0, 0, 0, 0),
+        )
+        position = image.get_rect(center=center)
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            frame.blit(outline, position.move(dx, dy))
+        frame.blit(image, position)
+        self._pellet_scaled[key] = frame
+        return frame
 
     def render_collectibles(
         self,
@@ -218,18 +253,8 @@ class EntityRenderer:
         for pellet in collectibles.active_pellets():
             name = power_theme if pellet.is_super else "normal"
             factor = self.POWER_SCALE if pellet.is_super else self.PELLET_SCALE
-            size = max(1, round(maze_renderer.tile_size * factor))
-            key = (name, size)
-            if key not in self._pellet_scaled:
-                source = self._pellet_frames[name]
-                scale = size / max(source.get_size())
-                dimensions = (
-                    max(1, round(source.get_width() * scale)),
-                    max(1, round(source.get_height() * scale)),
-                )
-                self._pellet_scaled[key] = pygame.transform.smoothscale(
-                    source, dimensions,
-                )
-            image = self._pellet_scaled[key]
+            minimum = 6 if pellet.is_super else 3
+            size = max(minimum, round(maze_renderer.tile_size * factor))
+            image = self._get_pellet_frame(name, size)
             center = maze_renderer.tile_center(pellet.x, pellet.y)
             self.surface.blit(image, image.get_rect(center=center))

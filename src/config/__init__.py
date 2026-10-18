@@ -1,4 +1,11 @@
-from . import load_config
-from . import config_validator
+"""Expose configuration loading and validation."""
 
-__all__ = ["load_config", "config_validator"]
+from .config_loader import ConfigError, load_config
+from .config_validater import GameConfig, config_validator
+
+__all__ = [
+    "ConfigError",
+    "GameConfig",
+    "load_config",
+    "config_validator",
+]

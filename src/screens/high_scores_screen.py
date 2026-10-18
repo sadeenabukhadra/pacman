@@ -10,21 +10,22 @@ from src.screens.base_screen import BaseScreen
 from src.ui.button import Button
 
 IMAGE_DIR = Path("images/highscore")
-SETTINGS_IMAGE_DIR = Path("images/sitting")   # صور زر BACK (نفس ستايل Settings)
+# صور زر BACK (نفس ستايل Settings)
+SETTINGS_IMAGE_DIR = Path("images/sitting")
 
 # قياسات الصورة الأصلية (1672 x 941) -- كل المواضع أدناه بإحداثياتها
 REF_IMG_W = 1672
 
 # الجدول: 10 صفوف متساوية تحت صف العناوين
 REF_HEADER_Y = 297
-REF_FIRST_ROW_Y = 346
-REF_ROW_STEP = 48.8
+REF_FIRST_ROW_Y = 386
+REF_ROW_STEP = 43.0
 REF_TABLE_CENTER_X = 836
 REF_TABLE_CENTER_Y = 550
 
 REF_RANK_X = 450      # عمود الترتيب (توسيط)
-REF_NAME_X = 560      # عمود الاسم (محاذاة يسار)
-REF_SCORE_X = 1250    # عمود النتيجة (محاذاة يمين)
+REF_NAME_X = 620      # عمود الاسم (محاذاة يسار)
+REF_SCORE_X = 1194    # Center directly below the SCORE heading.
 
 REF_BACK_CY = 895     # مركز زر الرجوع
 
@@ -34,7 +35,7 @@ BAR_MIN_ALPHA = 90    # شفافية أقل من هذا تُقص من هامش �
 
 # قياسات بكسلات النافذة (1200 x 800) وتتكيف مع العرض
 WINDOW_REF_W = 1200
-ROW_FONT_SIZE = 22
+ROW_FONT_SIZE = 20
 HEADER_FONT_SIZE = 20
 EMPTY_FONT_SIZE = 28
 EMPTY_SUB_FONT_SIZE = 17
@@ -57,14 +58,13 @@ def _load_font(path: str, size: int) -> pygame.font.Font:
     return pygame.font.Font(None, round(size * 1.4))
 
 
-def _load_bar(path: Path, width: int) -> pygame.Surface:
-    """Load a row bar, trim its transparent margin and set its width."""
+def _load_bar(path: Path) -> pygame.Surface:
+    """Trim the supplied row image before fitting it to each exact slot."""
     image = pygame.image.load(str(path)).convert_alpha()
-    image = image.subsurface(
-        image.get_bounding_rect(min_alpha=BAR_MIN_ALPHA)
-    ).copy()
-    height = round(image.get_height() * width / image.get_width())
-    return pygame.transform.smoothscale(image, (width, height))
+    bounds = image.get_bounding_rect(min_alpha=BAR_MIN_ALPHA)
+    if bounds.width == 0 or bounds.height == 0:
+        raise ValueError(f"Empty score bar: {path.name}")
+    return image.subsurface(bounds).copy()
 
 
 class HighScoresScreen(BaseScreen):
@@ -143,14 +143,11 @@ class HighScoresScreen(BaseScreen):
         # Row bars (الأول ذهبي، الباقي أزرق)
         # -------------------------
 
-        bar_width = self._x(ROW_BAR_W)
         self.first_bar = _load_bar(
             IMAGE_DIR / "first_user_inscore.png",
-            bar_width,
         )
         self.other_bar = _load_bar(
             IMAGE_DIR / "scound_users_inscore.png",
-            bar_width,
         )
 
         # -------------------------
@@ -179,7 +176,8 @@ class HighScoresScreen(BaseScreen):
         )
         self.back_button.set_selected(True)
 
-        self.scores: list[dict] = []
+        self.scores: list[dict[str, int | str]] = []
+        self._row_bars: dict[tuple[bool, int, int], pygame.Surface] = {}
         self.on_enter()
 
     # -------------------------
@@ -260,29 +258,47 @@ class HighScoresScreen(BaseScreen):
         )
 
     def _draw_rows(self) -> None:
-        """Draw one row (with its bar) per saved score."""
-        for index, entry in enumerate(self.scores):
-            y = self._y(REF_FIRST_ROW_Y + index * REF_ROW_STEP)
+        """Fit one supplied bar and its text inside each background slot."""
+        # Measured boundaries on the latest 1672 x 941 background.
+        # Its last slot is shorter, so it gets its own fitted bar/font.
+        edges = (365, 407, 450, 493, 536, 579,
+                 621, 664, 707, 750, 780)
+        for index, entry in enumerate(self.scores[:10]):
+            top = self._y(edges[index]) + 2
+            bottom = self._y(edges[index + 1]) - 2
+            rect = pygame.Rect(
+                self._x(326), top, self._x(1346) - self._x(326),
+                max(1, bottom - top),
+            )
+            first = index == 0
+            key = (first, rect.width, rect.height)
+            if key not in self._row_bars:
+                source = self.first_bar if first else self.other_bar
+                self._row_bars[key] = pygame.transform.smoothscale(
+                    source, rect.size,
+                )
+            self.surface.blit(self._row_bars[key], rect)
             color = RANK_COLORS.get(index, TEXT_COLOR)
-
-            bar = self.first_bar if index == 0 else self.other_bar
-            self.surface.blit(
-                bar,
-                bar.get_rect(center=(self._x(REF_TABLE_CENTER_X), y)),
+            values = (
+                (str(index + 1), REF_RANK_X, "center", 95),
+                (str(entry["name"]).upper(), REF_NAME_X, "midleft", 460),
+                (f"{int(entry['score']):,}", REF_SCORE_X, "center", 220),
             )
-
-            self._draw_text(
-                self.row_font, str(index + 1), color,
-                (self._x(REF_RANK_X), y), "center",
-            )
-            self._draw_text(
-                self.row_font, entry["name"].upper(), color,
-                (self._x(REF_NAME_X), y), "midleft",
-            )
-            self._draw_text(
-                self.row_font, f"{entry['score']:,}", color,
-                (self._x(REF_SCORE_X), y), "midright",
-            )
+            for value, x, anchor, allowed_width in values:
+                text = self.row_font.render(value, True, color)
+                factor = min(
+                    1.0, self._x(allowed_width) / max(1, text.get_width()),
+                    max(1, rect.height - 4) / max(1, text.get_height()),
+                )
+                if factor < 1.0:
+                    text = pygame.transform.smoothscale(text, (
+                        max(1, round(text.get_width() * factor)),
+                        max(1, round(text.get_height() * factor)),
+                    ))
+                target = text.get_rect(**{
+                    anchor: (self._x(x), rect.centery),
+                })
+                self.surface.blit(text, target)
 
     def _draw_empty_message(self) -> None:
         """Draw the message shown when no user has a score yet."""
@@ -303,7 +319,7 @@ class HighScoresScreen(BaseScreen):
         self.surface.blit(self.backdrop, (0, 0))
         self.surface.blit(self.image, (0, self.image_top))
 
-        self._draw_headers()
+        # Column headings are already present in the background image.
 
         if self.scores:
             self._draw_rows()

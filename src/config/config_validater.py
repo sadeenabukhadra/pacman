@@ -1,7 +1,35 @@
-from typing import Any
+"""Validate raw game settings and provide independent safe defaults."""
+
+from typing import Any, TypedDict
 
 
-DEFAULT_CONFIG: dict[str, Any] = {
+class LevelConfig(TypedDict):
+    """Describe one level in generator cell dimensions."""
+
+    width: int
+    height: int
+
+
+class GameConfig(TypedDict):
+    """Describe normalized settings passed to the game."""
+
+    highscore_filename: str
+    theme: str
+    lives: int
+    pacgum: int
+    point_per_pacgum: int
+    point_per_super_pacgum: int
+    point_per_ghost: int
+    seed: int
+    level_max_time: int
+    level: list[LevelConfig]
+
+
+MIN_MAZE_SIZE = 3
+MAX_MAZE_SIZE = 100
+MIN_LEVELS = 10
+
+DEFAULT_CONFIG: GameConfig = {
     "highscore_filename": "highscore.json",
     "theme": "cosmic",
     "lives": 3,
@@ -12,290 +40,153 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "seed": 42,
     "level_max_time": 90,
     "level": [
-        {"width": 14, "height": 14},
-        {"width": 18, "height": 18},
-        {"width": 22, "height": 22},
-        {"width": 26, "height": 26},
-        {"width": 30, "height": 30},
-        {"width": 34, "height": 34},
-        {"width": 38, "height": 38},
-        {"width": 42, "height": 42},
-        {"width": 46, "height": 46},
-        {"width": 50, "height": 50},
+        {"width": size, "height": size}
+        for size in (14, 18, 22, 26, 30, 34, 38, 42, 46, 50)
     ],
 }
 
 
-def config_validator(config: dict[str, Any]) -> dict[str, Any]:
-    validated_config: dict[str, Any] = {}
-
-    if (
-        "highscore_filename" not in config
-        or not isinstance(config["highscore_filename"], str)
-    ):
-        print(
-            "Warning: invalid or missing 'highscore_filename'. "
-            f"Using default value: "
-            f"{DEFAULT_CONFIG['highscore_filename']}"
-        )
-        validated_config["highscore_filename"] = (
-            DEFAULT_CONFIG["highscore_filename"]
-        )
-    else:
-        validated_config["highscore_filename"] = _valid_string(
-            config["highscore_filename"],
-            DEFAULT_CONFIG["highscore_filename"],
-            "highscore_filename",
-        )
-
-    if (
-        "theme" not in config
-        or not isinstance(config["theme"], str)
-    ):
-        print(
-            "Warning: invalid or missing 'theme'. "
-            f"Using default value: {DEFAULT_CONFIG['theme']}"
-        )
-        validated_config["theme"] = DEFAULT_CONFIG["theme"]
-    else:
-        validated_config["theme"] = _valid_theme(
-            config["theme"],
-            DEFAULT_CONFIG["theme"],
-        )
-
-    if "lives" not in config or type(config["lives"]) is not int:
-        print(
-            "Warning: invalid or missing 'lives'. "
-            f"Using default value: {DEFAULT_CONFIG['lives']}"
-        )
-        validated_config["lives"] = DEFAULT_CONFIG["lives"]
-    else:
-        validated_config["lives"] = _valid_integer(
-            config["lives"],
-            DEFAULT_CONFIG["lives"],
-            "lives",
-            min_value=1,
-        )
-
-    if "pacgum" not in config or type(config["pacgum"]) is not int:
-        print(
-            "Warning: invalid or missing 'pacgum'. "
-            f"Using default value: {DEFAULT_CONFIG['pacgum']}"
-        )
-        validated_config["pacgum"] = DEFAULT_CONFIG["pacgum"]
-    else:
-        validated_config["pacgum"] = _valid_integer(
-            config["pacgum"],
-            DEFAULT_CONFIG["pacgum"],
-            "pacgum",
-            min_value=0,
-        )
-
-    if (
-        "point_per_pacgum" not in config
-        or type(config["point_per_pacgum"]) is not int
-    ):
-        print(
-            "Warning: invalid or missing 'point_per_pacgum'. "
-            f"Using default value: {DEFAULT_CONFIG['point_per_pacgum']}"
-        )
-        validated_config["point_per_pacgum"] = (
-            DEFAULT_CONFIG["point_per_pacgum"]
-        )
-    else:
-        validated_config["point_per_pacgum"] = _valid_integer(
-            config["point_per_pacgum"],
-            DEFAULT_CONFIG["point_per_pacgum"],
-            "point_per_pacgum",
-            min_value=0,
-        )
-
-    if (
-        "point_per_super_pacgum" not in config
-        or type(config["point_per_super_pacgum"]) is not int
-    ):
-        print(
-            "Warning: invalid or missing 'point_per_super_pacgum'. "
-            f"Using default value: "
-            f"{DEFAULT_CONFIG['point_per_super_pacgum']}"
-        )
-        validated_config["point_per_super_pacgum"] = (
-            DEFAULT_CONFIG["point_per_super_pacgum"]
-        )
-    else:
-        validated_config["point_per_super_pacgum"] = _valid_integer(
-            config["point_per_super_pacgum"],
-            DEFAULT_CONFIG["point_per_super_pacgum"],
-            "point_per_super_pacgum",
-            min_value=0,
-        )
-
-    if (
-        "point_per_ghost" not in config
-        or type(config["point_per_ghost"]) is not int
-    ):
-        print(
-            "Warning: invalid or missing 'point_per_ghost'. "
-            f"Using default value: {DEFAULT_CONFIG['point_per_ghost']}"
-        )
-        validated_config["point_per_ghost"] = (
-            DEFAULT_CONFIG["point_per_ghost"]
-        )
-    else:
-        validated_config["point_per_ghost"] = _valid_integer(
-            config["point_per_ghost"],
-            DEFAULT_CONFIG["point_per_ghost"],
-            "point_per_ghost",
-            min_value=0,
-        )
-
-    if "seed" not in config or type(config["seed"]) is not int:
-        print(
-            "Warning: invalid or missing 'seed'. "
-            f"Using default value: {DEFAULT_CONFIG['seed']}"
-        )
-        validated_config["seed"] = DEFAULT_CONFIG["seed"]
-    else:
-        validated_config["seed"] = _valid_integer(
-            config["seed"],
-            DEFAULT_CONFIG["seed"],
-            "seed",
-            min_value=0,
-        )
-
-    if (
-        "level_max_time" not in config
-        or type(config["level_max_time"]) is not int
-    ):
-        print(
-            "Warning: invalid or missing 'level_max_time'. "
-            f"Using default value: {DEFAULT_CONFIG['level_max_time']}"
-        )
-        validated_config["level_max_time"] = (
-            DEFAULT_CONFIG["level_max_time"]
-        )
-    else:
-        validated_config["level_max_time"] = _valid_integer(
-            config["level_max_time"],
-            DEFAULT_CONFIG["level_max_time"],
-            "level_max_time",
-            min_value=1,
-        )
-        if (
-            "level" not in config
-            or not isinstance(config["level"], list)
-        ):
-            print(
-                "Warning: invalid or missing 'level'. "
-                "Using default levels."
-            )
-            validated_config["level"] = DEFAULT_CONFIG["level"]
-        else:
-            validated_config["level"] = _valid_levels(
-                config["level"],
-                DEFAULT_CONFIG["level"],
-            )
-
-        return validated_config
+def _warn(key: str, message: str) -> None:
+    """Display a readable validation warning."""
+    print(f"Warning: '{key}': {message}")
 
 
-def _valid_integer(
-    value: int,
+def _integer(
+    value: object,
     default: int,
     key: str,
-    min_value: int = 0,
+    minimum: int,
+    maximum: int | None = None,
 ) -> int:
-    if value < min_value:
-        print(
-            f"Warning: invalid value for '{key}': {value}. "
-            f"Using default value: {default}"
-        )
+    """Replace only an invalid integer field with its own default."""
+    if not isinstance(value, int) or isinstance(value, bool):
+        _warn(key, f"missing or not an integer; using {default}.")
         return default
-
+    if value < minimum or (maximum is not None and value > maximum):
+        _warn(key, f"value {value} is out of range; using {default}.")
+        return default
     return value
 
 
-def _valid_string(
-    value: str,
-    default: str,
-    key: str,
-) -> str:
-    if not value.strip():
-        print(
-            f"Warning: invalid value for '{key}'. "
-            f"Using default value: {default}"
-        )
-        return default
-
-    return value
+def _value(config: dict[str, Any], key: str, alias: str) -> object:
+    """Prefer the canonical key, accepting a known legacy spelling."""
+    if key in config:
+        return config[key]
+    if alias in config:
+        _warn(alias, f"accepted as '{key}'; prefer the canonical spelling.")
+        return config[alias]
+    return None
 
 
-def _valid_theme(value: str, default: str) -> str:
-    valid_themes = ("cosmic", "ice")
-
-    if value not in valid_themes:
-        print(
-            f"Warning: invalid theme '{value}'. "
-            f"Using default value: {default}"
-        )
-        return default
-
-    return value
+def _filename(value: object) -> str:
+    """Normalize a non-empty highscore path without opening it."""
+    if isinstance(value, str) and value.strip() and "\x00" not in value:
+        return value.strip()
+    default = DEFAULT_CONFIG["highscore_filename"]
+    _warn("highscore_filename", f"missing or invalid; using '{default}'.")
+    return default
 
 
-def _valid_levels(
-    levels: list[Any],
-    default: list[dict[str, int]],
-) -> list[dict[str, int]]:
-    if len(levels) < 10:
-        print(
-            "Warning: at least 10 levels are required. "
-            "Using default levels."
-        )
-        return default
+def _theme(value: object) -> str:
+    """Accept either supported theme, ignoring case and outer spaces."""
+    if isinstance(value, str):
+        name = value.strip().lower()
+        if name in ("ice", "cosmic"):
+            return name
+    default = DEFAULT_CONFIG["theme"]
+    _warn("theme", f"missing or invalid; using '{default}'.")
+    return default
 
-    validated_levels: list[dict[str, int]] = []
 
-    for index, level in enumerate(levels):
-        if not isinstance(level, dict):
-            print(
-                f"Warning: level {index + 1} is invalid. "
-                "Using default levels."
-            )
-            return default
+def _copy_default_levels() -> list[LevelConfig]:
+    """Return fresh level dictionaries to avoid sharing mutable defaults."""
+    return [
+        {"width": level["width"], "height": level["height"]}
+        for level in DEFAULT_CONFIG["level"]
+    ]
 
-        if "width" not in level or "height" not in level:
-            print(
-                f"Warning: width or height is missing "
-                f"in level {index + 1}. "
-                "Using default levels."
-            )
-            return default
 
-        width = level["width"]
-        height = level["height"]
+def _levels(value: object) -> list[LevelConfig]:
+    """Validate dimensions and pad short level lists to ten levels.
 
-        if type(width) is not int or type(height) is not int:
-            print(
-                f"Warning: width and height in level "
-                f"{index + 1} must be integers. "
-                "Using default levels."
-            )
-            return default
+    Generator dimensions are limited to 3..100 cells for this graphical
+    implementation. Retain valid supplied levels when replacing bad ones.
+    """
+    defaults = _copy_default_levels()
+    if not isinstance(value, list) or not value:
+        _warn("level", "missing, empty or not a list; using default levels.")
+        return defaults
+    result: list[LevelConfig] = []
+    for index, item in enumerate(value):
+        fallback = defaults[min(index, len(defaults) - 1)]
+        if not isinstance(item, dict):
+            _warn(f"level[{index}]", "not an object; using a default level.")
+            result.append({
+                "width": fallback["width"], "height": fallback["height"],
+            })
+            continue
+        result.append({
+            "width": _integer(
+                item.get("width"), fallback["width"],
+                f"level[{index}].width", MIN_MAZE_SIZE, MAX_MAZE_SIZE,
+            ),
+            "height": _integer(
+                item.get("height"), fallback["height"],
+                f"level[{index}].height", MIN_MAZE_SIZE, MAX_MAZE_SIZE,
+            ),
+        })
+    if len(result) < MIN_LEVELS:
+        _warn("level", "at least ten levels required; adding default levels.")
+        result.extend(defaults[len(result):])
+    return result
 
-        if width <= 0 or height <= 0:
-            print(
-                f"Warning: invalid width or height "
-                f"in level {index + 1}. "
-                "Using default levels."
-            )
-            return default
 
-        validated_levels.append(
-            {
-                "width": width,
-                "height": height,
-            }
-        )
+def config_validator(config: dict[str, Any]) -> GameConfig:
+    """Return complete validated settings, ignoring unknown keys.
 
-    return validated_levels
+    Accept the user's existing singular 'point_per_*' keys. Plural
+    'points_per_*' keys and the old 'highscor_filename' spelling are
+    accepted as aliases, with canonical keys taking precedence.
+
+    Args:
+        config: Raw JSON object returned by load_config.
+
+    Returns:
+        Fully populated settings with independent level dictionaries.
+    """
+    return {
+        "highscore_filename": _filename(_value(
+            config, "highscore_filename", "highscor_filename",
+        )),
+        "theme": _theme(config.get("theme")),
+        "lives": _integer(
+            config.get("lives"), DEFAULT_CONFIG["lives"], "lives", 1,
+        ),
+        "pacgum": _integer(
+            config.get("pacgum"), DEFAULT_CONFIG["pacgum"], "pacgum", 0,
+        ),
+        "point_per_pacgum": _integer(
+            _value(config, "point_per_pacgum", "points_per_pacgum"),
+            DEFAULT_CONFIG["point_per_pacgum"], "point_per_pacgum", 0,
+        ),
+        "point_per_super_pacgum": _integer(
+            _value(
+                config, "point_per_super_pacgum", "points_per_super_pacgum",
+            ),
+            DEFAULT_CONFIG["point_per_super_pacgum"],
+            "point_per_super_pacgum", 0,
+        ),
+        "point_per_ghost": _integer(
+            _value(config, "point_per_ghost", "points_per_ghost"),
+            DEFAULT_CONFIG["point_per_ghost"], "point_per_ghost", 0,
+        ),
+        # The supplied generator treats seed <= 0 as nondeterministic.
+        "seed": _integer(
+            config.get("seed"), DEFAULT_CONFIG["seed"], "seed", 1,
+        ),
+        "level_max_time": _integer(
+            config.get("level_max_time"), DEFAULT_CONFIG["level_max_time"],
+            "level_max_time", 1,
+        ),
+        "level": _levels(config.get("level")),
+    }

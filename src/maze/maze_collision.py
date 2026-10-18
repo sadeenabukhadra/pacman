@@ -114,11 +114,17 @@ class MazeCollision:
         if not self.maze.in_bounds(cell_x, cell_y):
             return False
 
-        return self.maze.can_move(
-            cell_x,
-            cell_y,
-            direction,
-        )
+        steps = {
+            NORTH: (0, -1),
+            EAST: (1, 0),
+            SOUTH: (0, 1),
+            WEST: (-1, 0),
+        }
+        step = steps.get(direction)
+        if step is None or self.maze.is_wall(cell_x, cell_y):
+            return False
+        dx, dy = step
+        return not self.maze.is_wall(cell_x + dx, cell_y + dy)
 
     def can_move_from_pixel(
         self,
