@@ -1,35 +1,45 @@
 #!/usr/bin/env bash
-# Build from the project's active Python environment.
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-PYTHON_BIN="${PYTHON_BIN:-python}"
-"$PYTHON_BIN" -c 'import PyInstaller, pygame, mazegenerator.mazegenerator' || {
-    echo 'Missing build dependencies. Activate your venv, then install pygame-ce, pyinstaller and the assigned maze package.' >&2
-    exit 1
-}
-"$PYTHON_BIN" -m PyInstaller --clean --noconfirm pac-man.spec
+PYTHON_BIN="${PYTHON_BIN:-$PWD/.venv/bin/python}"
+if [ ! -x "$PYTHON_BIN" ]; then
+  echo "ERROR: Activate/install .venv or set PYTHON_BIN." >&2
+  exit 1
+fi
+"$PYTHON_BIN" -c 'import PyInstaller, pygame, mazegenerator.mazegenerator'
+# A separate output avoids collisions with previous dist/pac-man directories.
+"$PYTHON_BIN" -m PyInstaller --clean --noconfirm \
+  --distpath dist --workpath build pac-man.spec
 "$PYTHON_BIN" - <<'PY'
 from pathlib import Path
 import platform
-import shutil
-import stat
+import zipfile
 
-folder = Path('dist/pac-man')
-(folder / 'data').mkdir(exist_ok=True)
+folder = Path('dist')
 launcher = folder / 'play.sh'
 launcher.write_text('''#!/usr/bin/env bash
 set -euo pipefail
-cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-if [ "$#" -eq 0 ]; then
-    set -- config.json
+GAME_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${1:-}" = "--help" ]; then
+    cat <<'HELP'
+PAC-MAN — Linux
+Run: bash play.sh
+Custom config: bash play.sh /path/to/config.json
+Move: arrow keys or WASD. See Instructions for game rules.
+Settings: Ice/Cosmic and fullscreen/windowed mode.
+Saves: ${XDG_DATA_HOME:-~/.local/share}/pacman-42/
+Default config and assets are embedded. No Python installation required.
+Keep both files together. Linux compatibility depends on system libraries.
+HELP
+    exit 0
 fi
-exec ./pac-man "$@"
-''')
-launcher.chmod(launcher.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-shutil.copyfile('packaging/PLAY_README.txt', folder / 'PLAY_README.txt')
-archive = shutil.make_archive(
-    f'dist/pac-man-{platform.system().lower()}-{platform.machine()}',
-    'zip', root_dir='dist', base_dir='pac-man',
-)
+exec "$GAME_DIR/pac-man" "$@"
+''', encoding='utf-8')
+launcher.chmod(0o755)
+archive = folder / f'pac-man-{platform.system().lower()}-{platform.machine()}.zip'
+with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as output:
+    output.write(folder / 'pac-man', 'pac-man')
+    output.write(launcher, 'play.sh')
 print(f'Package ready: {archive}')
+print('ZIP contains exactly pac-man and play.sh.')
 PY

@@ -1,10 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Build a portable directory with assets beside the executable."""
+"""Build a single executable with embedded resources."""
+
 from pathlib import Path
 
 root = Path(SPECPATH)
-datas = [(str(root / "images"), "images"),
-         (str(root / "config.json"), ".")]
+
+datas = [
+    (str(root / "images"), "images"),
+    (str(root / "config.json"), "."),
+]
+
+datas.append((str(root / "packaging" / "PLAY_README.txt"), "."))
+
 for folder in ("fonts", "sounds"):
     if (root / folder).is_dir():
         datas.append((str(root / folder), folder))
@@ -17,23 +24,24 @@ a = Analysis(
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[str(root / "packaging" / "runtime_paths.py")],
+    runtime_hooks=[
+        str(root / "packaging" / "runtime_paths.py"),
+    ],
     excludes=[],
     noarchive=False,
 )
+
 pyz = PYZ(a.pure)
+
 exe = EXE(
-    pyz, a.scripts, [],
-    exclude_binaries=True,
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    [],
     name="pac-man",
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     console=True,
-    contents_directory=".",
-)
-coll = COLLECT(
-    exe, a.binaries, a.datas,
-    strip=False, upx=False, name="pac-man",
 )
