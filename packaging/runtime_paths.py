@@ -1,4 +1,4 @@
-"""Keep embedded assets temporary and player data persistent in frozen builds."""
+"""Keep bundled assets temporary and player data persistent."""
 
 import os
 from pathlib import Path
@@ -37,7 +37,7 @@ def configure_frozen_paths() -> None:
     original = getattr(score_manager, "configure_scores", None)
     if original is not None:
         def configure_scores(filename: str) -> None:
-            """Resolve configured relative score paths under persistent data."""
+            """Resolve relative score paths under persistent data."""
             path = Path(filename).expanduser()
             if not path.is_absolute():
                 path = saves / path

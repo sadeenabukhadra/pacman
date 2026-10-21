@@ -10,7 +10,8 @@ def launch() -> int:
     except ModuleNotFoundError as error:
         if error.name == "pygame":
             print(
-                "ERROR: pygame-ce is not installed in this Python environment.\n"
+                "ERROR: pygame-ce is not installed in this "
+                "Python environment.\n"
                 "Activate your virtual environment, then run:\n"
                 "  python -m pip install -r requirements.txt",
                 file=sys.stderr,
