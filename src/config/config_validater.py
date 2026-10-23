@@ -2,6 +2,8 @@
 
 from typing import Any, TypedDict
 
+from .config_loader import queue_config_notice
+
 
 class LevelConfig(TypedDict):
     """Describe one level in generator cell dimensions."""
@@ -28,6 +30,7 @@ class GameConfig(TypedDict):
 MIN_MAZE_SIZE = 3
 MAX_MAZE_SIZE = 100
 MIN_LEVELS = 10
+MAX_LEVEL_TIME = 300
 
 DEFAULT_CONFIG: GameConfig = {
     "highscore_filename": "highscore.json",
@@ -47,8 +50,8 @@ DEFAULT_CONFIG: GameConfig = {
 
 
 def _warn(key: str, message: str) -> None:
-    """Display a readable validation warning."""
-    print(f"Warning: '{key}': {message}")
+    """Defer a readable warning until normal program exit."""
+    queue_config_notice(f"Warning: '{key}': {message}")
 
 
 def _integer(
@@ -62,7 +65,11 @@ def _integer(
     if not isinstance(value, int) or isinstance(value, bool):
         _warn(key, f"missing or not an integer; using {default}.")
         return default
-    if value < minimum or (maximum is not None and value > maximum):
+    if maximum is not None and value > maximum:
+        _warn(key, f"value {value} exceeds maximum {maximum}; "
+              f"using default {default}.")
+        return default
+    if value < minimum:
         _warn(key, f"value {value} is out of range; using {default}.")
         return default
     return value
@@ -186,7 +193,7 @@ def config_validator(config: dict[str, Any]) -> GameConfig:
         ),
         "level_max_time": _integer(
             config.get("level_max_time"), DEFAULT_CONFIG["level_max_time"],
-            "level_max_time", 1,
+            "level_max_time", 1, MAX_LEVEL_TIME,
         ),
         "level": _levels(config.get("level")),
     }

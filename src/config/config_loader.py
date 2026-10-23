@@ -1,8 +1,59 @@
-"""Read a JSON game configuration with full-line hash comments."""
+"""Read a JSON game configuration with line comments and deferred notices."""
 
+import atexit
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+
+_NOTICES: list[str] = []
+
+
+def _print_notices() -> None:
+    """Print deferred configuration notices when the program exits."""
+    if not _NOTICES:
+        return
+    print("\nConfiguration notices:", file=sys.stderr)
+    for notice in _NOTICES:
+        print(notice, file=sys.stderr)
+    _NOTICES.clear()
+
+
+def queue_config_notice(message: str) -> None:
+    """Queue a configuration notice for normal interpreter shutdown."""
+    if message not in _NOTICES:
+        _NOTICES.append(message)
+
+
+atexit.register(_print_notices)
+
+
+def _remove_comments(source: str) -> tuple[str, list[int]]:
+    """Remove # and // comments outside strings, preserving line numbers."""
+    cleaned: list[str] = []
+    lines: list[int] = []
+    in_string = False
+    escaped = False
+    for number, line in enumerate(source.splitlines(keepends=True), 1):
+        for index, character in enumerate(line):
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif character == "\\":
+                    escaped = True
+                elif character == '"':
+                    in_string = False
+            elif character == '"':
+                in_string = True
+            elif character == "#" or line[index:index + 2] == "//":
+                ending = "\n" if line.endswith("\n") else ""
+                cleaned.append(line[:index] + ending)
+                lines.append(number)
+                break
+        else:
+            cleaned.append(line)
+    return "".join(cleaned), lines
 
 
 class ConfigError(ValueError):
@@ -17,7 +68,7 @@ def _reject_constant(value: str) -> None:
 def load_config(file_path: str) -> dict[str, Any]:
     """Read raw settings without validating individual game parameters.
 
-    Ignore lines whose first non-whitespace character is '#'. Preserve
+    Ignore full-line and inline # or // comments outside strings. Preserve
     line numbers for JSON error reporting. Hashes within strings remain
     unchanged. A UTF-8 byte order mark is accepted.
 
@@ -41,10 +92,13 @@ def load_config(file_path: str) -> dict[str, Any]:
             f"Cannot read configuration '{path}': {error}"
         ) from error
 
-    cleaned = "".join(
-        "\n" if line.lstrip().startswith("#") else line
-        for line in source.splitlines(keepends=True)
-    )
+    cleaned, comment_lines = _remove_comments(source)
+    if comment_lines:
+        locations = ", ".join(str(number) for number in comment_lines)
+        queue_config_notice(
+            f"Info: '{path}': ignored comments on lines {locations}; "
+            "the remaining configuration was used."
+        )
     try:
         data: Any = json.loads(cleaned, parse_constant=_reject_constant)
     except json.JSONDecodeError as error:
