@@ -1,6 +1,6 @@
 {
-  "world": "ice",
+  "world": "cosmic",
   "music": true,
   "sfx": true,
-  "fullscreen": false
+  "fullscreen": true
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
-PYTHON_BIN="${PYTHON_BIN:-$PWD/.venv/bin/python}"
+PYTHON_BIN="$(command -v python3)" bash build.sh
 if [ ! -x "$PYTHON_BIN" ]; then
   echo "ERROR: Activate/install .venv or set PYTHON_BIN." >&2
   exit 1
